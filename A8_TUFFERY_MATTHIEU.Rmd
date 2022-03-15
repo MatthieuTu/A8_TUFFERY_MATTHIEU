@@ -1,0 +1,98 @@
+---
+title: "Assignment 8"
+author: "Matthieu Tuffery"
+date: '2022-03-14'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+_Allaria Petilolata_ , also known as Garlic mustard is an invasive species. To test whether the presence of this plant has an effect on the plant community it invades, Former Queen's Students identified the species present in several quadrates at Queen's University Biological Station. 
+
+
+```{r}
+# loading all libraries that will be usefull.
+library(dplyr)
+library(ggplot2)
+library(ape)
+library(ggtree)
+library(vegan)
+```
+
+```{r}
+FS = read.csv("FloristicSurvey.csv")# loading the Dataset
+names(FS)[names(FS) == 'ï..Quadrate'] <- 'Quadrate'# replacing the column name by a less tricky one. 
+names(FS)[names(FS) == 'Population'] <- 'Sampling_location_code'# replacing the column name by a less tricky one.
+```
+
+We first split our Data set in two Datasets, "Subsets" that contains the abundance of each plant species in each quadrate, and "Samples" that contains the characteristics of each quadrate (presence/absence of garlic, quantity of garlic at different stages)
+```{r}
+Subset = select(FS, Claytonia_virginiana:maianthenum_racemosum)
+row.names(Subset) = FS$Quadrate
+
+
+Samples = select(FS, Quadrate:Budding)
+Samples$Sampling_location_code = as.character(Samples$Sampling_location_code)# we also convert the population column into a character string, as it is code, not an actual quantity
+Samples$Location = gsub("i","inside",Samples$Location) # we replace i and o by clearer labels
+Samples$Location = gsub("o","outside",Samples$Location)
+
+```
+
+
+The Bray method is used to construct a distance matrix of the different quadrate, because This method allows to take into account the abundance of each species and not only the presence/absence of the species in the quadrate. 
+From this distance matrix a neighbor-joining tree is constructed, and it will allow us to try to answer the question. 
+
+```{r}
+Dist = vegdist(Subset, method = "bray", binary = F)
+Tree = nj(Dist)
+```
+
+In the tree presented below, the tips of the tree are colored according to the location (inside or outside a garlic mustard patch). It seems that garlic has few effect on the species community. Though some very similar quadrate have all garlic mustard or no garlic mustard, it is difficult to highlight a general pattern with this tree.
+```{r}
+ggtree(Tree, layout = "rectangular") %<+% Samples + 
+  geom_tiplab(aes(colour=Location)) + 
+  theme(legend.position="right")
+```
+
+Perahps, to see a pattern appear we need to take into account the abundance or the life stage of garlic mustard plants present in the quadrate. The tree presented here shows the patterns according to the total number of garlic plants 
+```{r, fig.width= 4, fig.height=5}
+Samples = mutate(Samples, Total_garlic = Budding + Bolting + Rosettes)
+
+ggtree(Tree, layout = "rectangular") %<+% Samples + 
+  geom_tiplab(aes(colour=Total_garlic)) + 
+  theme(legend.position="right")
+
+```
+
+The three quadrates 7i 1, 2 and 3 are clustered and have the highest quantity of garlic. It is more difficult to see any other pattern with this graph. Perhaps, high abundance of garlic mustard has an effect on the plant community, but with this data it is impossible to tell if it is actually a causality relationship. We could also for example hypothesize that quadrates with a specific plant composition are favorable to a garlic mustard invasion. 
+
+
+To contrast the effect of the garlic on the plant community, we compare it to the effect of the sampling location on the plant community
+```{r}
+ggtree(Tree, layout = "rectangular") %<+% Samples + 
+  geom_tiplab(aes(colour=Sampling_location_code)) + 
+  theme(legend.position="right")
+```
+
+There is a clearly stronger effect of the sampling location on the plant community than of the presence/absence of garlic mustard. The communities with similar locations also have similar species compositions. 
+
+We can also create bivariate plots to visualize the data. When dots are colored according to the presence/absence of garlic mustard, the quadrates seem randomly distributes. However, when they are colored according to the sampling location, the quadrates are clearly clustered by sampling location. If the presence of Garlic Mustard has an effect, it is very small, as it has less influence over the plant community than the sampling location. 
+```{r}
+set.seed(42)
+NMDSdat<-metaMDS(Dist,k=2)
+
+PDat<-data.frame(NMDS1=NMDSdat$points[,1],
+                 NMDS2=NMDSdat$points[,2],
+                 Quadrate=row.names(Subset))
+
+PDat<-merge(PDat,Samples,by="Quadrate",all.x=T,all.y=F)
+```
+```{r}
+qplot(x=NMDS1,y=NMDS2,colour=Location,alpha=I(0.6),data=PDat)+theme_bw()
+qplot(x=NMDS1,y=NMDS2,colour=Sampling_location_code,alpha=I(0.6),data=PDat)+theme_bw()
+```
+
+As a Conclusion, This data showed no strong effect of the presence of Garlic Mustard on the composition of plant communities. Though there might be a correlation between the highest Garlic Mustard abundance and the species composition, the effect of Garlic on the community composition is very small compared to the effect of the sampling location.  
